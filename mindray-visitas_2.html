@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mindray Visitas</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://mindray-visitas-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window._fbSet = (path, data) => set(ref(db, path), data);
+    window._fbRemove = (path) => remove(ref(db, path));
+    window._fbListen = (path, cb) => onValue(ref(db, path), snap => cb(snap.val()));
+  </script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f172a; font-family: 'DM Sans', sans-serif; color: #e2e8f0; }
+    input, select, textarea, button { font-family: 'DM Sans', sans-serif; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const PRODUCTOS = ["Torre de Laparoscopia UX3","Torre de Laparoscopia UX5","Instrumental REHUSABLE","Instrumental DESECHABLE"];
+const ROLES_CONTACTO = ["Doctor/a","Cirujano/a","Anestesiólogo/a","Enfermera/o Quirófano","Sala de Operaciones","Logística","Compras / Administración","Dirección","Otro"];
+const ESTADOS = ["Interesado","En negociación","Pendiente oferta","Cerrado ✓","No interesado"];
+const COLOR_ESTADO = {"Interesado":"#22c55e","En negociación":"#f59e0b","Pendiente oferta":"#3b82f6","Cerrado ✓":"#8b5cf6","No interesado":"#ef4444"};
+const COLOR_ROL = {"Doctor/a":"#00b4d8","Cirujano/a":"#7c3aed","Anestesiólogo/a":"#6366f1","Enfermera/o Quirófano":"#ec4899","Sala de Operaciones":"#f43f5e","Logística":"#f59e0b","Compras / Administración":"#10b981","Dirección":"#e11d48","Otro":"#64748b"};
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function formatDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"});
+}
+function defaultContacto() { return {id:genId(),nombre:"",rol:"Doctor/a",telefono:"",notas:""}; }
+function defaultForm() { return {id:null,fecha:new Date().toISOString().slice(0,10),cliente:"",productos:[],estado:"Interesado",notasVisita:"",proximoPaso:"",contactos:[defaultContacto()]}; }
+
+const S = {
+  root:{background:"#0f172a",minHeight:"100vh"},
+  header:{background:"linear-gradient(135deg,#0f172a,#1e293b)",borderBottom:"1px solid #1e3a5f",padding:"14px 16px",position:"sticky",top:0,zIndex:10},
+  headerInner:{display:"flex",justifyContent:"space-between",alignItems:"center"},
+  logo:{display:"flex",alignItems:"center",gap:8},
+  logoMark:{background:"#00b4d8",color:"#fff",borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:16},
+  logoText:{fontWeight:800,fontSize:17,letterSpacing:2,color:"#fff"},
+  headerSub:{fontSize:11,color:"#64748b",marginTop:2},
+  btnResumen:{background:"transparent",border:"1px solid #334155",color:"#94a3b8",borderRadius:8,padding:"7px 13px",fontSize:13,cursor:"pointer"},
+  content:{padding:"16px 16px 60px"},
+  toast:{position:"fixed",top:70,left:"50%",transform:"translateX(-50%)",background:"#1e293b",border:"1px solid #334155",color:"#e2e8f0",padding:"10px 20px",borderRadius:10,fontSize:14,zIndex:100,whiteSpace:"nowrap",boxShadow:"0 4px 20px #0008"},
+  statsRow:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16},
+  stat:{background:"#1e293b",borderRadius:10,padding:"10px 8px 8px",textAlign:"center"},
+  statVal:{fontWeight:800,fontSize:22,lineHeight:1},
+  statLbl:{fontSize:10,color:"#64748b",marginTop:4},
+  row:{display:"flex",gap:8,marginBottom:14},
+  search:{flex:1,background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"10px 14px",color:"#e2e8f0",fontSize:14,outline:"none"},
+  btnNueva:{background:"#00b4d8",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:700,fontSize:14,cursor:"pointer",whiteSpace:"nowrap"},
+  empty:{textAlign:"center",padding:"60px 20px"},
+  card:{background:"#1e293b",borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",border:"1px solid #334155"},
+  cardTop:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6},
+  cardCliente:{fontWeight:700,fontSize:15,color:"#f1f5f9"},
+  badge:{borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"},
+  cardMeta:{display:"flex",gap:14,fontSize:12,color:"#64748b",marginTop:6},
+  cardSeg:{marginTop:8,fontSize:12,color:"#f59e0b",background:"#f59e0b11",borderRadius:6,padding:"4px 8px"},
+  rolChip:{borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:500,marginRight:4,marginBottom:4,display:"inline-block"},
+  pageTitle:{fontWeight:800,fontSize:18,marginBottom:18,color:"#f1f5f9"},
+  lbl:{fontSize:12,color:"#64748b",marginBottom:5,marginTop:14,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"},
+  input:{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"11px 14px",color:"#e2e8f0",fontSize:15,outline:"none"},
+  estadoGrid:{display:"flex",flexWrap:"wrap",gap:8,marginTop:4},
+  estadoBtn:{borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"},
+  prodBtn:{background:"transparent",color:"#94a3b8",border:"1.5px solid #334155",borderRadius:10,padding:"10px 14px",fontSize:13,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",marginBottom:8},
+  prodBtnSel:{background:"#00b4d8",color:"#fff",border:"1.5px solid #00b4d8",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",marginBottom:8},
+  btnRow:{display:"flex",gap:10,marginTop:24},
+  btnCancel:{flex:1,background:"transparent",border:"1px solid #334155",color:"#94a3b8",borderRadius:10,padding:"13px",fontSize:15,cursor:"pointer"},
+  btnGuardar:{flex:2,background:"#00b4d8",border:"none",color:"#fff",borderRadius:10,padding:"13px",fontSize:15,fontWeight:700,cursor:"pointer"},
+  backBtn:{background:"none",border:"none",color:"#64748b",fontSize:14,cursor:"pointer",padding:"0 0 14px",display:"block"},
+  detailCliente:{fontWeight:800,fontSize:20,color:"#f1f5f9"},
+  detailBlock:{background:"#1e293b",borderRadius:10,padding:14,marginBottom:10,borderLeft:"3px solid #334155"},
+  detailBlockLbl:{fontSize:12,color:"#64748b",fontWeight:700,marginBottom:6,textTransform:"uppercase"},
+  detailBlockTxt:{fontSize:14,color:"#cbd5e1",lineHeight:1.6},
+  seccion:{fontSize:11,color:"#64748b",textTransform:"uppercase",letterSpacing:1,fontWeight:700,marginBottom:10},
+  contactoCard:{background:"#0f172a",border:"1px solid #334155",borderRadius:10,padding:"12px 14px",marginBottom:8},
+  contactoHeader:{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},
+  btnAddC:{background:"transparent",border:"1px solid #00b4d8",color:"#00b4d8",borderRadius:8,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:600},
+  btnDelC:{background:"transparent",border:"none",color:"#ef4444",cursor:"pointer",fontSize:14,padding:"2px 6px"},
+  rolBtn:{borderRadius:20,padding:"5px 11px",fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6,marginBottom:6},
+  resBox:{background:"#1e293b",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #334155"},
+  resTitle:{fontWeight:800,fontSize:17,color:"#f1f5f9",marginBottom:2},
+  resMeta:{fontSize:12,color:"#64748b",marginBottom:16,textTransform:"capitalize"},
+  resRow:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8},
+  resPaso:{background:"#0f172a",borderRadius:8,padding:"10px 12px",marginBottom:8,borderLeft:"3px solid #f59e0b"},
+  syncDot:{width:8,height:8,borderRadius:"50%",display:"inline-block",marginRight:6},
+};
+
+function App() {
+  const [view, setView] = React.useState("home");
+  const [visitas, setVisitas] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [synced, setSynced] = React.useState(true);
+  const [selected, setSelected] = React.useState(null);
+  const [form, setForm] = React.useState(defaultForm());
+  const [search, setSearch] = React.useState("");
+  const [toast, setToast] = React.useState(null);
+  const [expandedC, setExpandedC] = React.useState(0);
+
+  React.useEffect(() => {
+    const wait = setInterval(() => {
+      if (window._fbListen) {
+        clearInterval(wait);
+        window._fbListen("visitas", (data) => {
+          const arr = data ? Object.entries(data).map(([k,v]) => ({...v, id:k})) : [];
+          arr.sort((a,b) => b.fecha.localeCompare(a.fecha));
+          setVisitas(arr);
+          setLoading(false);
+        });
+      }
+    }, 200);
+    return () => clearInterval(wait);
+  }, []);
+
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
+
+  async function guardar() {
+    if (!form.cliente.trim()) { showToast("⚠️ El nombre del cliente es obligatorio"); return; }
+    if (form.contactos.some(c => !c.nombre.trim())) { showToast("⚠️ Todos los contactos necesitan nombre"); return; }
+    setSynced(false);
+    const id = form.id || genId();
+    const data = {...form, id};
+    delete data.id;
+    try {
+      await window._fbSet(`visitas/${id}`, data);
+      showToast(form.id ? "✅ Visita actualizada" : "✅ Visita registrada");
+      setSynced(true);
+    } catch(e) {
+      showToast("❌ Error al guardar");
+      setSynced(true);
+    }
+    setForm(defaultForm()); setView("home");
+  }
+
+  async function eliminar(id) {
+    if (confirm("¿Eliminar esta visita?")) {
+      await window._fbRemove(`visitas/${id}`);
+      setView("home");
+      showToast("🗑️ Eliminada");
+    }
+  }
+
+  function editar(v) { setForm({...v, productos: v.productos || [], contactos: v.contactos || [defaultContacto()]}); setExpandedC(0); setView("nueva"); }
+  function addContacto() { setForm(f => ({...f, contactos:[...f.contactos, defaultContacto()]})); setExpandedC(form.contactos.length); }
+  function updC(idx, field, val) { setForm(f => ({...f, contactos: f.contactos.map((c,i) => i===idx ? {...c,[field]:val} : c)})); }
+  function delC(idx) { if(form.contactos.length===1){showToast("⚠️ Mínimo un contacto");return;} setForm(f=>({...f,contactos:f.contactos.filter((_,i)=>i!==idx)})); setExpandedC(0); }
+
+  const filtradas = visitas.filter(v => {
+    const q = search.toLowerCase();
+    return v.cliente.toLowerCase().includes(q) || (v.productos||[]).some(p=>p.toLowerCase().includes(q)) || (v.contactos||[]).some(c=>c.nombre.toLowerCase().includes(q)||c.rol.toLowerCase().includes(q));
+  });
+
+  const hoy = new Date().toISOString().slice(0,10);
+  const visitasHoy = visitas.filter(v=>v.fecha===hoy).length;
+  const semana = (() => { const d=new Date(); d.setDate(d.getDate()-7); return visitas.filter(v=>new Date(v.fecha)>=d).length; })();
+  const cerrados = visitas.filter(v=>v.estado==="Cerrado ✓").length;
+  const pendientes = visitas.filter(v=>v.proximoPaso&&v.estado!=="Cerrado ✓"&&v.estado!=="No interesado").length;
+
+  if (loading) return (
+    <div style={{...S.root, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16}}>
+      <div style={{...S.logoMark, width:48, height:48, fontSize:24}}>M</div>
+      <div style={{color:"#64748b", fontSize:14}}>Conectando con la base de datos...</div>
+    </div>
+  );
+
+  return (
+    <div style={S.root}>
+      <div style={S.header}>
+        <div style={S.headerInner}>
+          <div>
+            <div style={S.logo}>
+              <span style={S.logoMark}>M</span>
+              <span style={S.logoText}>MINDRAY</span>
+              <span style={{...S.syncDot, background: synced ? "#22c55e" : "#f59e0b"}} title={synced ? "Sincronizado" : "Guardando..."}/>
+            </div>
+            <div style={S.headerSub}>Gestión de Visitas Comerciales</div>
+          </div>
+          <button style={S.btnResumen} onClick={()=>setView(view==="resumen"?"home":"resumen")}>{view==="resumen"?"← Volver":"📊 Resumen"}</button>
+        </div>
+      </div>
+
+      <div style={S.content}>
+        {toast && <div style={S.toast}>{toast}</div>}
+
+        {view==="home" && <div>
+          <div style={S.statsRow}>
+            {[["Hoy",visitasHoy,"#00b4d8"],["Semana",semana,"#7c3aed"],["Cerrados",cerrados,"#22c55e"],["Seguim.",pendientes,"#f59e0b"]].map(([l,v,c])=>(
+              <div key={l} style={{...S.stat,borderTop:`3px solid ${c}`}}><div style={{...S.statVal,color:c}}>{v}</div><div style={S.statLbl}>{l}</div></div>
+            ))}
+          </div>
+          <div style={S.row}>
+            <input style={S.search} placeholder="🔍 Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <button style={S.btnNueva} onClick={()=>{setForm(defaultForm());setExpandedC(0);setView("nueva");}}>+ Nueva</button>
+          </div>
+          {filtradas.length===0 ? (
+            <div style={S.empty}><div style={{fontSize:48,marginBottom:12}}>📋</div><div style={{color:"#94a3b8"}}>{search?"Sin resultados":"Registra tu primera visita"}</div></div>
+          ) : filtradas.map(v=>(
+            <div key={v.id} style={S.card} onClick={()=>{setSelected(v);setView("detalle");}}>
+              <div style={S.cardTop}>
+                <div style={S.cardCliente}>{v.cliente}</div>
+                <div style={{...S.badge,background:COLOR_ESTADO[v.estado]+"22",color:COLOR_ESTADO[v.estado],border:`1px solid ${COLOR_ESTADO[v.estado]}44`}}>{v.estado}</div>
+              </div>
+              {(v.productos||[]).length>0 && <div style={{fontSize:12,color:"#00b4d8",marginBottom:6}}>🔬 {(v.productos||[]).join(" · ")}</div>}
+              <div style={{marginBottom:4}}>{(v.contactos||[]).map(c=>(
+                <span key={c.id} style={{...S.rolChip,background:(COLOR_ROL[c.rol]||"#64748b")+"22",color:COLOR_ROL[c.rol]||"#64748b",border:`1px solid ${(COLOR_ROL[c.rol]||"#64748b")}44`}}>{c.nombre} · {c.rol}</span>
+              ))}</div>
+              <div style={S.cardMeta}><span>📅 {formatDate(v.fecha)}</span><span>👥 {(v.contactos||[]).length} contacto{(v.contactos||[]).length!==1?"s":""}</span></div>
+              {v.proximoPaso && <div style={S.cardSeg}>→ {v.proximoPaso}</div>}
+            </div>
+          ))}
+        </div>}
+
+        {view==="nueva" && <div>
+          <div style={S.pageTitle}>{form.id?"✏️ Editar visita":"➕ Nueva visita"}</div>
+          <div style={S.lbl}>Fecha *</div>
+          <input style={S.input} type="date" value={form.fecha} onChange={e=>setForm(f=>({...f,fecha:e.target.value}))}/>
+          <div style={S.lbl}>Cliente / Hospital *</div>
+          <input style={S.input} placeholder="Ej: Hospital Universitario La Paz" value={form.cliente} onChange={e=>setForm(f=>({...f,cliente:e.target.value}))}/>
+          <div style={S.lbl}>Producto(s) presentado(s)</div>
+          {PRODUCTOS.map(p=>{
+            const sel=(form.productos||[]).includes(p);
+            return <button key={p} style={sel?S.prodBtnSel:S.prodBtn} onClick={()=>setForm(f=>({...f,productos:sel?(f.productos||[]).filter(x=>x!==p):[...(f.productos||[]),p]}))}>
+              {p}{sel&&<span>✓</span>}
+            </button>;
+          })}
+          <div style={S.lbl}>Estado</div>
+          <div style={S.estadoGrid}>
+            {ESTADOS.map(e=>(
+              <button key={e} style={{...S.estadoBtn,background:form.estado===e?COLOR_ESTADO[e]:"transparent",color:form.estado===e?"#fff":COLOR_ESTADO[e],border:`1.5px solid ${COLOR_ESTADO[e]}`}} onClick={()=>setForm(f=>({...f,estado:e}))}>{e}</button>
+            ))}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:20,marginBottom:8}}>
+            <div style={S.seccion}>👥 Contactos</div>
+            <button style={S.btnAddC} onClick={addContacto}>+ Añadir contacto</button>
+          </div>
+          {form.contactos.map((c,idx)=>(
+            <div key={c.id} style={S.contactoCard}>
+              <div style={S.contactoHeader} onClick={()=>setExpandedC(expandedC===idx?-1:idx)}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:COLOR_ROL[c.rol]||"#64748b"}}/>
+                  <span style={{fontSize:14,color:"#e2e8f0",fontWeight:600}}>{c.nombre||`Contacto ${idx+1}`}</span>
+                  {c.rol&&<span style={{...S.badge,background:(COLOR_ROL[c.rol]||"#64748b")+"22",color:COLOR_ROL[c.rol]||"#64748b",fontSize:10}}>{c.rol}</span>}
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  {form.contactos.length>1&&<button style={S.btnDelC} onClick={e=>{e.stopPropagation();delC(idx);}}>✕</button>}
+                  <span style={{color:"#64748b",fontSize:12}}>{expandedC===idx?"▲":"▼"}</span>
+                </div>
+              </div>
+              {expandedC===idx&&<div style={{paddingTop:12}}>
+                <div style={S.lbl}>Nombre *</div>
+                <input style={S.input} placeholder="Ej: Dra. García" value={c.nombre} onChange={e=>updC(idx,"nombre",e.target.value)}/>
+                <div style={S.lbl}>Rol / Departamento</div>
+                <div style={{display:"flex",flexWrap:"wrap",marginTop:4}}>
+                  {ROLES_CONTACTO.map(r=>(
+                    <button key={r} style={{...S.rolBtn,background:c.rol===r?(COLOR_ROL[r]||"#64748b"):"transparent",color:c.rol===r?"#fff":(COLOR_ROL[r]||"#64748b"),border:`1.5px solid ${COLOR_ROL[r]||"#64748b"}`}} onClick={()=>updC(idx,"rol",r)}>{r}</button>
+                  ))}
+                </div>
+                <div style={S.lbl}>Teléfono</div>
+                <input style={S.input} type="tel" placeholder="Ej: 612 345 678" value={c.telefono} onChange={e=>updC(idx,"telefono",e.target.value)}/>
+                <div style={S.lbl}>Notas del contacto</div>
+                <input style={S.input} placeholder="Observaciones..." value={c.notas} onChange={e=>updC(idx,"notas",e.target.value)}/>
+              </div>}
+            </div>
+          ))}
+          <div style={S.lbl}>Notas de la visita</div>
+          <textarea style={{...S.input,minHeight:90,resize:"vertical"}} placeholder="¿Qué se habló?..." value={form.notasVisita} onChange={e=>setForm(f=>({...f,notasVisita:e.target.value}))}/>
+          <div style={S.lbl}>Próximo paso / Seguimiento</div>
+          <input style={S.input} placeholder="Ej: Enviar oferta la semana que viene" value={form.proximoPaso} onChange={e=>setForm(f=>({...f,proximoPaso:e.target.value}))}/>
+          <div style={S.btnRow}>
+            <button style={S.btnCancel} onClick={()=>setView("home")}>Cancelar</button>
+            <button style={S.btnGuardar} onClick={guardar}>{form.id?"Guardar cambios":"Registrar visita"}</button>
+          </div>
+        </div>}
+
+        {view==="detalle"&&selected&&(()=>{
+          const v=visitas.find(x=>x.id===selected.id)||selected;
+          return <div>
+            <button style={S.backBtn} onClick={()=>setView("home")}>← Volver</button>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8}}>
+              <div style={S.detailCliente}>{v.cliente}</div>
+              <div style={{...S.badge,background:COLOR_ESTADO[v.estado]+"22",color:COLOR_ESTADO[v.estado],border:`1px solid ${COLOR_ESTADO[v.estado]}44`,fontSize:13}}>{v.estado}</div>
+            </div>
+            <div style={{...S.detailBlock,borderLeft:"3px solid #1e3a5f"}}>
+              <div style={{fontSize:13,color:"#94a3b8"}}>📅 {formatDate(v.fecha)}</div>
+              {(v.productos||[]).length>0&&<div style={{fontSize:13,color:"#00b4d8",marginTop:6}}>🔬 {(v.productos||[]).join(", ")}</div>}
+            </div>
+            <div style={{...S.seccion,marginTop:4}}>👥 Contactos ({(v.contactos||[]).length})</div>
+            {(v.contactos||[]).map(c=>(
+              <div key={c.id} style={{...S.detailBlock,borderLeft:`3px solid ${COLOR_ROL[c.rol]||"#64748b"}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{fontWeight:700,color:"#f1f5f9",fontSize:15}}>{c.nombre}</div>
+                  <div style={{...S.badge,background:(COLOR_ROL[c.rol]||"#64748b")+"22",color:COLOR_ROL[c.rol]||"#64748b",fontSize:11}}>{c.rol}</div>
+                </div>
+                {c.telefono&&<div style={{fontSize:13,color:"#94a3b8"}}>📞 {c.telefono}</div>}
+                {c.notas&&<div style={{fontSize:13,color:"#cbd5e1",marginTop:4}}>{c.notas}</div>}
+              </div>
+            ))}
+            {v.notasVisita&&<div style={S.detailBlock}><div style={S.detailBlockLbl}>📝 Notas</div><div style={S.detailBlockTxt}>{v.notasVisita}</div></div>}
+            {v.proximoPaso&&<div style={{...S.detailBlock,borderLeft:"3px solid #f59e0b"}}><div style={{...S.detailBlockLbl,color:"#f59e0b"}}>→ Próximo paso</div><div style={S.detailBlockTxt}>{v.proximoPaso}</div></div>}
+            <div style={S.btnRow}>
+              <button style={S.btnCancel} onClick={()=>eliminar(v.id)}>🗑️ Eliminar</button>
+              <button style={S.btnGuardar} onClick={()=>editar(v)}>✏️ Editar</button>
+            </div>
+          </div>;
+        })()}
+
+        {view==="resumen"&&<div>
+          <div style={S.pageTitle}>📊 Resumen para mi jefe</div>
+          <div style={S.resBox}>
+            <div style={S.resTitle}>Panel de actividad comercial</div>
+            <div style={S.resMeta}>Actualizado: {new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}</div>
+            <div style={S.statsRow}>
+              {[["Total",visitas.length,"#00b4d8"],["Semana",semana,"#7c3aed"],["Cerrados",cerrados,"#22c55e"],["Seguim.",pendientes,"#f59e0b"]].map(([l,v,c])=>(
+                <div key={l} style={{...S.stat,borderTop:`3px solid ${c}`}}><div style={{...S.statVal,color:c}}>{v}</div><div style={S.statLbl}>{l}</div></div>
+              ))}
+            </div>
+            <div style={{...S.seccion,marginTop:4}}>Por estado:</div>
+            {ESTADOS.map(e=>{const n=visitas.filter(v=>v.estado===e).length;if(!n)return null;return(
+              <div key={e} style={S.resRow}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:COLOR_ESTADO[e]}}/><span style={{color:"#e2e8f0",fontSize:14}}>{e}</span></div><div style={{...S.badge,background:COLOR_ESTADO[e]+"22",color:COLOR_ESTADO[e]}}>{n}</div></div>
+            );})}
+            <div style={{...S.seccion,marginTop:16}}>Por producto:</div>
+            {PRODUCTOS.map(p=>{const n=visitas.filter(v=>(v.productos||[]).includes(p)).length;if(!n)return null;return(
+              <div key={p} style={S.resRow}><span style={{color:"#e2e8f0",fontSize:13}}>🔬 {p}</span><div style={{...S.badge,background:"#00b4d822",color:"#00b4d8"}}>{n}</div></div>
+            );})}
+            {pendientes>0&&<><div style={{...S.seccion,marginTop:16}}>Próximos pasos:</div>
+              {visitas.filter(v=>v.proximoPaso&&v.estado!=="Cerrado ✓"&&v.estado!=="No interesado").map(v=>(
+                <div key={v.id} style={S.resPaso}><div style={{color:"#00b4d8",fontWeight:600,fontSize:14}}>{v.cliente}</div><div style={{color:"#94a3b8",fontSize:13}}>{v.proximoPaso}</div></div>
+              ))}</>}
+          </div>
+          <button style={{...S.btnGuardar,width:"100%",marginTop:0}} onClick={()=>{
+            const totalC=visitas.reduce((a,v)=>a+(v.contactos||[]).length,0);
+            const txt=["INFORME VISITAS COMERCIALES — MINDRAY",`Fecha: ${new Date().toLocaleDateString("es-ES")}`,"",
+              `Total visitas: ${visitas.length} | Contactos: ${totalC}`,`Semana: ${semana} | Cerrados: ${cerrados} | Seguimientos: ${pendientes}`,"",
+              "POR ESTADO:",...ESTADOS.map(e=>{const n=visitas.filter(v=>v.estado===e).length;return n?`  ${e}: ${n}`:null;}).filter(Boolean),"",
+              "POR PRODUCTO:",...PRODUCTOS.map(p=>{const n=visitas.filter(v=>(v.productos||[]).includes(p)).length;return n?`  ${p}: ${n}`:null;}).filter(Boolean),"",
+              "PRÓXIMOS PASOS:",...visitas.filter(v=>v.proximoPaso&&v.estado!=="Cerrado ✓"&&v.estado!=="No interesado").map(v=>`  • ${v.cliente}: ${v.proximoPaso}`),"",
+              "HISTÓRICO:",...visitas.map(v=>[`  [${formatDate(v.fecha)}] ${v.cliente} | ${(v.productos||[]).join(", ")||"—"} | ${v.estado}`,...(v.contactos||[]).map(c=>`    - ${c.nombre} (${c.rol})${c.telefono?" · "+c.telefono:""}`),v.notasVisita?`    Notas: ${v.notasVisita}`:null,v.proximoPaso?`    Siguiente: ${v.proximoPaso}`:null].filter(Boolean)).flat()
+            ].join("\n");
+            navigator.clipboard.writeText(txt).then(()=>showToast("📋 Copiado al portapapeles"));
+          }}>📋 Copiar informe completo</button>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
